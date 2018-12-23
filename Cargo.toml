@@ -1,0 +1,8 @@
+[package]
+name = "rlox"
+version = "0.1.0"
+authors = ["Francois Stephany <francois@tamere.eu>"]
+edition = "2018"
+
+[dependencies]
+scanlex = "0.1.2"

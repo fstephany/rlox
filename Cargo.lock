@@ -1,0 +1,14 @@
+[[package]]
+name = "rlox"
+version = "0.1.0"
+dependencies = [
+ "scanlex 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "scanlex"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[metadata]
+"checksum scanlex 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "e6a2c84b697bc9496978f7457b17039a22b5d89c674964e8a480de4d5ddd55dc"
