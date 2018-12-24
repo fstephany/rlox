@@ -106,6 +106,14 @@ impl Scanner {
         println!("Error at line {}: {}", line, message);
     }
 
+    fn add_token(&mut self, kind: TokenKind, value: Option<String>) {
+        // Beware that we are slicing bytes here. Not actual characters.
+        let text_slice = &self.source[self.start..self.current];
+        let token = Token::new(kind, text_slice.to_owned(), value, self.line);
+
+        self.tokens.push(token);
+    }
+
     fn scan_token(&mut self) {
         let c = match self.advance() {
             Some(c) => c,
@@ -114,60 +122,60 @@ impl Scanner {
 
         match c {
             // Single char tokens
-            '(' => self.add_token(TokenKind::LeftParen),
-            ')' => self.add_token(TokenKind::RightParen),
-            '{' => self.add_token(TokenKind::LeftBrace),
-            '}' => self.add_token(TokenKind::RightBrace),
-            ',' => self.add_token(TokenKind::Comma),
-            '.' => self.add_token(TokenKind::Dot),
-            '-' => self.add_token(TokenKind::Minus),
-            '+' => self.add_token(TokenKind::Plus),
-            ';' => self.add_token(TokenKind::SemiColon),
-            '*' => self.add_token(TokenKind::Star),
+            '(' => self.add_token(TokenKind::LeftParen, None),
+            ')' => self.add_token(TokenKind::RightParen, None),
+            '{' => self.add_token(TokenKind::LeftBrace, None),
+            '}' => self.add_token(TokenKind::RightBrace, None),
+            ',' => self.add_token(TokenKind::Comma, None),
+            '.' => self.add_token(TokenKind::Dot, None),
+            '-' => self.add_token(TokenKind::Minus, None),
+            '+' => self.add_token(TokenKind::Plus, None),
+            ';' => self.add_token(TokenKind::SemiColon, None),
+            '*' => self.add_token(TokenKind::Star, None),
 
             // Single or two char(s) tokens
             '!' => {
-                let token = if self.next_matches('=') {
+                let token = if self.advance_if_matches('=') {
                     TokenKind::BangEqual
                 } else {
                     TokenKind::Bang
                 };
-                self.add_token(token)
+                self.add_token(token, None)
             },
             '=' => {
-                let token = if self.next_matches('=') {
+                let token = if self.advance_if_matches('=') {
                     TokenKind::EqualEqual
                 } else {
                     TokenKind::Equal
                 };
-                self.add_token(token)
+                self.add_token(token, None)
             },
             '<' => {
-                let token = if self.next_matches('=') {
+                let token = if self.advance_if_matches('=') {
                     TokenKind::LessEqual
                 } else {
                     TokenKind::Less
                 };
-                self.add_token(token)
+                self.add_token(token, None)
             },
             '>' => {
-                let token = if self.next_matches('=') {
+                let token = if self.advance_if_matches('=') {
                     TokenKind::GreaterEqual
                 } else {
                     TokenKind::Greater
                 };
-                self.add_token(token)
+                self.add_token(token, None)
             },
 
             // '/' can be a commented line.
             '/' => {
-                if self.next_matches('/') {
+                if self.advance_if_matches('/') {
                     // consume the comment without doing anything with it.
                     while self.peek() != '\n' && !self.is_at_end() {
                         self.advance();
                     }
                 } else {
-                    self.add_token(TokenKind::Slash);
+                    self.add_token(TokenKind::Slash, None);
                 }
             },
 
@@ -176,9 +184,35 @@ impl Scanner {
 
             '\n' => self.line = self.line + 1,
 
+            // string literals
+            '"' => self.string_literal(),
+
             // Nothing we know
             default => self.error(self.line, "Unexpected character".to_owned()),
         }
+    }
+
+
+    fn string_literal(&mut self) {
+        while self.peek() != '"' && !self.is_at_end() {
+            if self.peek() == '\n' {
+                self.line = self.line + 1;
+            }
+
+            self.advance();
+        }
+
+        if self.is_at_end() {
+            self.error(self.line, "Unterminated string".to_owned());
+            return
+        } 
+        
+        
+        // closing quote
+        self.advance();
+
+        let literal_value = &self.source[self.start +1 .. self.current -1];
+        self.add_token(TokenKind::String, Some(literal_value.to_owned()));
     }
 
     /// Get the next char without consuming it.
@@ -187,7 +221,7 @@ impl Scanner {
     }
 
     /// consumes the next char if it matches the expected one.
-    fn next_matches(&mut self, expected: char) -> bool {
+    fn advance_if_matches(&mut self, expected: char) -> bool {
         match self.source.chars().nth(self.current) {
             Some(c) => {
                 if c == expected {
@@ -199,14 +233,6 @@ impl Scanner {
             }
             None => return false,
         }
-    }
-
-    fn add_token(&mut self, kind: TokenKind) {
-        // Beware that we are slicing bytes here. Not actual characters.
-        let text_slice = &self.source[self.start..self.current];
-        let token = Token::new(kind, text_slice.to_owned(), None, self.line);
-
-        self.tokens.push(token);
     }
 
     fn advance(&mut self) -> Option<char> {
@@ -268,5 +294,53 @@ mod tests {
 
         let scanned_token = &scanner.tokens[0];
         assert_eq!(TokenKind::Less, scanned_token.kind);
+    }
+
+
+    #[test]
+    fn comments() {
+        let source = r#"
+        // This is a comment
+        < // another comment
+        {// a third comment
+        "#;
+
+        let mut scanner = Scanner::new(source.to_owned());
+        scanner.scan_tokens();
+        assert!(!scanner.had_errors);
+
+        assert_eq!(3, scanner.tokens.len());
+    }
+
+    #[test]
+    fn string_literal() {
+        let source = r#"
+        "blop"
+        "#;
+
+        let mut scanner = Scanner::new(source.to_owned());
+        scanner.scan_tokens();
+        assert!(!scanner.had_errors);
+        let lit_string = &scanner.tokens[0];
+        assert_eq!(&TokenKind::String, &lit_string.kind);
+        assert_eq!("blop", lit_string.literal.as_ref().unwrap());
+    }
+
+    #[test]
+    fn multi_line_string_literal() {
+        let source = r#"
+        "blop
+        blip"
+        "#;
+
+        let literal = r#"blop
+        blip"#;
+
+        let mut scanner = Scanner::new(source.to_owned());
+        scanner.scan_tokens();
+        assert!(!scanner.had_errors);
+        let lit_string = &scanner.tokens[0];
+        assert_eq!(&TokenKind::String, &lit_string.kind);
+        assert_eq!(literal, lit_string.literal.as_ref().unwrap());
     }
 }
