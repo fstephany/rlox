@@ -1,16 +1,15 @@
 use std::env;
-use scanlex::{Scanner, Token};
+
+mod scanner;
 
 fn main() {
-
     match env::args().nth(1) {
         Some(arg) => run_file(arg),
-        None => println!("Pass a file to interpret")
+        None => println!("Pass a file to interpret"),
     };
-        
+
     println!("Done.");
 }
-
 
 fn run_file(filename: String) {
     run(&filename);
@@ -18,8 +17,5 @@ fn run_file(filename: String) {
 }
 
 fn run(source: &String) {
-    let scanner = Scanner::new(source);
-    for token in scanner {
-        println!("{:?}", token);
-    }
+    println!("Running source: {}", source);
 }
