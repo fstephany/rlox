@@ -25,8 +25,8 @@ enum TokenKind {
 
     // Literals.
     Identifier,
-    String,
-    Number,
+    String(String),
+    Number(f32),
 
     // Keywords.
     And,
@@ -53,16 +53,14 @@ enum TokenKind {
 struct Token {
     pub kind: TokenKind,
     pub lexeme: String,
-    pub literal: Option<String>,
     pub line: usize,
 }
 
 impl Token {
-    fn new(kind: TokenKind, lexeme: String, literal: Option<String>, line: usize) -> Token {
+    fn new(kind: TokenKind, lexeme: String, line: usize) -> Token {
         Token {
             kind,
             lexeme,
-            literal,
             line,
         }
     }
@@ -98,7 +96,7 @@ impl Scanner {
         }
 
         self.tokens
-            .push(Token::new(TokenKind::Eof, "".to_owned(), None, self.line));
+            .push(Token::new(TokenKind::Eof, "".to_owned(), self.line));
     }
 
     fn error(&mut self, line: usize, message: String) {
@@ -106,10 +104,10 @@ impl Scanner {
         println!("Error at line {}: {}", line, message);
     }
 
-    fn add_token(&mut self, kind: TokenKind, value: Option<String>) {
+    fn add_token(&mut self, kind: TokenKind) {
         // Beware that we are slicing bytes here. Not actual characters.
         let text_slice = &self.source[self.start..self.current];
-        let token = Token::new(kind, text_slice.to_owned(), value, self.line);
+        let token = Token::new(kind, text_slice.to_owned(), self.line);
 
         self.tokens.push(token);
     }
@@ -122,16 +120,16 @@ impl Scanner {
 
         match c {
             // Single char tokens
-            '(' => self.add_token(TokenKind::LeftParen, None),
-            ')' => self.add_token(TokenKind::RightParen, None),
-            '{' => self.add_token(TokenKind::LeftBrace, None),
-            '}' => self.add_token(TokenKind::RightBrace, None),
-            ',' => self.add_token(TokenKind::Comma, None),
-            '.' => self.add_token(TokenKind::Dot, None),
-            '-' => self.add_token(TokenKind::Minus, None),
-            '+' => self.add_token(TokenKind::Plus, None),
-            ';' => self.add_token(TokenKind::SemiColon, None),
-            '*' => self.add_token(TokenKind::Star, None),
+            '(' => self.add_token(TokenKind::LeftParen,),
+            ')' => self.add_token(TokenKind::RightParen),
+            '{' => self.add_token(TokenKind::LeftBrace),
+            '}' => self.add_token(TokenKind::RightBrace),
+            ',' => self.add_token(TokenKind::Comma),
+            '.' => self.add_token(TokenKind::Dot),
+            '-' => self.add_token(TokenKind::Minus),
+            '+' => self.add_token(TokenKind::Plus),
+            ';' => self.add_token(TokenKind::SemiColon),
+            '*' => self.add_token(TokenKind::Star),
 
             // Single or two char(s) tokens
             '!' => {
@@ -140,7 +138,7 @@ impl Scanner {
                 } else {
                     TokenKind::Bang
                 };
-                self.add_token(token, None)
+                self.add_token(token)
             },
             '=' => {
                 let token = if self.advance_if_matches('=') {
@@ -148,7 +146,7 @@ impl Scanner {
                 } else {
                     TokenKind::Equal
                 };
-                self.add_token(token, None)
+                self.add_token(token)
             },
             '<' => {
                 let token = if self.advance_if_matches('=') {
@@ -156,7 +154,7 @@ impl Scanner {
                 } else {
                     TokenKind::Less
                 };
-                self.add_token(token, None)
+                self.add_token(token)
             },
             '>' => {
                 let token = if self.advance_if_matches('=') {
@@ -164,7 +162,7 @@ impl Scanner {
                 } else {
                     TokenKind::Greater
                 };
-                self.add_token(token, None)
+                self.add_token(token)
             },
 
             // '/' can be a commented line.
@@ -175,7 +173,7 @@ impl Scanner {
                         self.advance();
                     }
                 } else {
-                    self.add_token(TokenKind::Slash, None);
+                    self.add_token(TokenKind::Slash);
                 }
             },
 
@@ -186,12 +184,37 @@ impl Scanner {
 
             // string literals
             '"' => self.string_literal(),
+            '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => self.number_literal(),
 
             // Nothing we know
             default => self.error(self.line, "Unexpected character".to_owned()),
         }
     }
 
+    fn is_digit(&self, c: char) -> bool {
+        c >= '0' && c <= '9'
+    }
+
+    fn number_literal(&mut self) {
+        while self.is_digit(self.peek()) {
+            self.advance();
+        }
+
+        // Fractional part
+        if self.peek() == '.' && self.is_digit(self.peek_next()) {
+            // consume '.'
+            self.advance();
+
+            while self.is_digit(self.peek()) {
+                self.advance();
+            }
+        }
+
+        let literal_value = &self.source[self.start .. self.current];
+        let double_value = literal_value.parse::<f32>().unwrap();
+        
+        self.add_token(TokenKind::Number(double_value));
+    }
 
     fn string_literal(&mut self) {
         while self.peek() != '"' && !self.is_at_end() {
@@ -207,17 +230,21 @@ impl Scanner {
             return
         } 
         
-        
         // closing quote
         self.advance();
 
+        // +1/-1 because we don't want the quote
         let literal_value = &self.source[self.start +1 .. self.current -1];
-        self.add_token(TokenKind::String, Some(literal_value.to_owned()));
+        self.add_token(TokenKind::String(literal_value.to_owned()));
     }
 
     /// Get the next char without consuming it.
     fn peek(&self) -> char {
         return self.source.chars().nth(self.current).unwrap_or('\0');
+    }
+
+    fn peek_next(&self) -> char {
+        return self.source.chars().nth(self.current + 1).unwrap_or('\0');
     }
 
     /// consumes the next char if it matches the expected one.
@@ -321,26 +348,34 @@ mod tests {
         let mut scanner = Scanner::new(source.to_owned());
         scanner.scan_tokens();
         assert!(!scanner.had_errors);
-        let lit_string = &scanner.tokens[0];
-        assert_eq!(&TokenKind::String, &lit_string.kind);
-        assert_eq!("blop", lit_string.literal.as_ref().unwrap());
+        assert_eq!(&TokenKind::String("blop".to_owned()), &scanner.tokens[0].kind);
     }
 
     #[test]
     fn multi_line_string_literal() {
-        let source = r#"
+        let source = String::from(r#"
         "blop
         blip"
-        "#;
+        "#);
 
-        let literal = r#"blop
-        blip"#;
+        let literal = String::from(r#"blop
+        blip"#);
 
-        let mut scanner = Scanner::new(source.to_owned());
+        let mut scanner = Scanner::new(source);
         scanner.scan_tokens();
         assert!(!scanner.had_errors);
-        let lit_string = &scanner.tokens[0];
-        assert_eq!(&TokenKind::String, &lit_string.kind);
-        assert_eq!(literal, lit_string.literal.as_ref().unwrap());
+        assert_eq!(&TokenKind::String(literal), &scanner.tokens[0].kind);
+    }
+
+    #[test]
+    fn numbers() {
+        let source = String::from("7 42 3.14");
+        let mut scanner = Scanner::new(source);
+        scanner.scan_tokens();
+        assert!(!scanner.had_errors);
+
+        assert_eq!(&TokenKind::Number(7.0), &scanner.tokens[0].kind);
+        assert_eq!(&TokenKind::Number(42.0), &scanner.tokens[1].kind);
+        assert_eq!(&TokenKind::Number(3.14), &scanner.tokens[2].kind);
     }
 }
