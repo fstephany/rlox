@@ -182,30 +182,62 @@ impl Scanner {
 
             '\n' => self.line = self.line + 1,
 
-            // string literals
+            // literals
             '"' => self.string_literal(),
-            '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => self.number_literal(),
+            '0'..='9' => self.number_literal(),
 
-            // Nothing we know
-            default => self.error(self.line, "Unexpected character".to_owned()),
+            // identifer & keywords
+            'a'..='z' | 'A'..='Z' | '_' => self.identifier(),
+
+            // Number literals & (reserved) words
+            _ => self.error(self.line, "Unexpected character".to_owned())
         }
     }
 
-    fn is_digit(&self, c: char) -> bool {
-        c >= '0' && c <= '9'
+    fn token_for(&self, identifier: &str) -> TokenKind {
+        match identifier {
+            "and" => TokenKind::And,
+            "class" => TokenKind::Class,
+            "else" => TokenKind::Else,
+            "false" => TokenKind::False,
+            "for" => TokenKind::For,
+            "fun" => TokenKind::Fun,
+            "if" => TokenKind::If,
+            "nil" => TokenKind::Nil,
+            "or" => TokenKind::Or,
+            "print" => TokenKind::Print,
+            "return" => TokenKind::Return,
+            "super" => TokenKind::Super,
+            "this" => TokenKind::This,
+            "true" => TokenKind::True,
+            "var" => TokenKind::Var,
+            "while" => TokenKind::While,
+
+            // Not a reserved keyword
+            _ => TokenKind::Identifier
+        }
+    }
+
+    fn identifier(&mut self) {
+        while self.peek().is_alphanumeric() {
+            self.advance();
+        }
+
+        let identifier_value = &self.source[self.start .. self.current];
+        self.add_token(self.token_for(identifier_value));
     }
 
     fn number_literal(&mut self) {
-        while self.is_digit(self.peek()) {
+        while self.peek().is_digit(10) {
             self.advance();
         }
 
         // Fractional part
-        if self.peek() == '.' && self.is_digit(self.peek_next()) {
+        if self.peek() == '.' && self.peek_next().is_digit(10) {
             // consume '.'
             self.advance();
 
-            while self.is_digit(self.peek()) {
+            while self.peek().is_digit(10) {
                 self.advance();
             }
         }
@@ -369,7 +401,7 @@ mod tests {
 
     #[test]
     fn numbers() {
-        let source = String::from("7 42 3.14");
+        let source = String::from("7 42 3.14 8A");
         let mut scanner = Scanner::new(source);
         scanner.scan_tokens();
         assert!(!scanner.had_errors);
@@ -377,5 +409,24 @@ mod tests {
         assert_eq!(&TokenKind::Number(7.0), &scanner.tokens[0].kind);
         assert_eq!(&TokenKind::Number(42.0), &scanner.tokens[1].kind);
         assert_eq!(&TokenKind::Number(3.14), &scanner.tokens[2].kind);
+
+        // 8A is not a number in rlox
+        assert_eq!(&TokenKind::Number(8.00), &scanner.tokens[3].kind);
+        assert_eq!(&TokenKind::Identifier, &scanner.tokens[4].kind);
+    }
+
+    #[test]
+    fn identifiers() {
+        let source = String::from("or k8s _blop var counter");
+        let mut scanner = Scanner::new(source);
+        scanner.scan_tokens();
+        assert!(!scanner.had_errors);
+
+        assert_eq!(&TokenKind::Or, &scanner.tokens[0].kind);
+        assert_eq!(&TokenKind::Identifier, &scanner.tokens[1].kind);
+        assert_eq!(&TokenKind::Identifier, &scanner.tokens[2].kind);
+        assert_eq!(&TokenKind::Var, &scanner.tokens[3].kind);
+        assert_eq!(&TokenKind::Identifier, &scanner.tokens[4].kind);
+        assert_eq!(&TokenKind::Eof, &scanner.tokens[5].kind);
     }
 }
