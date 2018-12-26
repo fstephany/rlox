@@ -380,7 +380,12 @@ mod tests {
         let mut scanner = Scanner::new(source.to_owned());
         scanner.scan_tokens();
         assert!(!scanner.had_errors);
-        assert_eq!(&TokenKind::String("blop".to_owned()), &scanner.tokens[0].kind);
+
+        let token = &scanner.tokens[0];
+
+        assert_eq!(&TokenKind::String("blop".to_owned()), &token.kind);
+        // Should the string literal lexeme contain the quotes?
+        // assert_eq!("blop", &token.lexeme);
     }
 
     #[test]

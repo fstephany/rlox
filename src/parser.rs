@@ -16,6 +16,9 @@ fn pretty_print(expr: &Expr) -> String {
             output.push_str(&token.lexeme);
             output.push_str(&pretty_print(expr.as_ref()))
         }
+        Expr::Literal(token) => {
+            output.push_str(&token.lexeme);
+        }
         _ => output.push_str("Unknown Expression")
     };
 
@@ -26,6 +29,13 @@ fn pretty_print(expr: &Expr) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn print_literal() {
+        let number_literal = Token::new(TokenKind::Number(42.0), "42".to_owned(), 1);
+        let result = pretty_print(&Expr::Literal(number_literal));
+        assert_eq!("42", &result);
+    }
 
     #[test]
     fn print_unary() {
