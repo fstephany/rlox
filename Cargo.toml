@@ -5,4 +5,3 @@ authors = ["Francois Stephany <francois@tamere.eu>"]
 edition = "2018"
 
 [dependencies]
-scanlex = "0.1.2"

@@ -1,5 +1,5 @@
 #[derive(Debug, PartialEq)]
-enum TokenKind {
+pub enum TokenKind {
     // Single-character tokens.
     LeftParen,
     RightParen,
@@ -50,14 +50,14 @@ enum TokenKind {
 }
 
 #[derive(Debug)]
-struct Token {
+pub struct Token {
     pub kind: TokenKind,
     pub lexeme: String,
     pub line: usize,
 }
 
 impl Token {
-    fn new(kind: TokenKind, lexeme: String, line: usize) -> Token {
+    pub fn new(kind: TokenKind, lexeme: String, line: usize) -> Token {
         Token {
             kind,
             lexeme,

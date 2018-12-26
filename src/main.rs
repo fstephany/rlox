@@ -1,6 +1,7 @@
 use std::env;
 
 mod scanner;
+mod parser;
 
 fn main() {
     match env::args().nth(1) {
