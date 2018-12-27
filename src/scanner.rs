@@ -1,4 +1,5 @@
-#[derive(Debug, PartialEq)]
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
     // Single-character tokens.
     LeftParen,
@@ -49,7 +50,7 @@ pub enum TokenKind {
     Eof,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Token {
     pub kind: TokenKind,
     pub lexeme: String,
@@ -57,7 +58,7 @@ pub struct Token {
 }
 
 impl Token {
-    pub fn new(kind: TokenKind, lexeme: String, line: usize) -> Token {
+    pub fn new(kind: TokenKind, lexeme: String, line: usize) -> Self {
         Token {
             kind,
             lexeme,
@@ -78,7 +79,7 @@ struct Scanner {
 }
 
 impl Scanner {
-    pub fn new(source: String) -> Scanner {
+    pub fn new(source: String) -> Self {
         Scanner {
             source: source,
             tokens: Vec::new(),

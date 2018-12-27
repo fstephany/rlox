@@ -1,23 +1,96 @@
 use crate::scanner::{Token, TokenKind};
 
 enum Expr {
+    Literal(Token),
     Unary(Token, Box<Expr>),
     Binary(Box<Expr>, Token, Box<Expr>),
-    Grouping(Box<Expr>),
-    Literal(Token)
+    Grouping(Box<Expr>)
 }
 
+
+pub struct Parser {
+    tokens: Vec<Token>,
+    current: usize,
+}
+
+impl Parser {
+    pub fn new(tokens: Vec<Token>) -> Self {
+        Parser {
+            tokens: tokens,
+            current: 0
+        }
+    }
+
+    fn isAtEnd(&self) -> bool {
+        self.peek().kind == TokenKind::Eof
+    }
+
+    fn peek(&self) -> Token {
+        self.tokens.get(self.current).unwrap().clone()
+    }
+
+    fn previous(&self) -> Token {
+        self.tokens.get(self.current - 1).unwrap().clone()
+    }
+
+    fn advance(&mut self) -> Token {
+        if !self.isAtEnd() {
+            self.current = self.current + 1;
+        }
+
+        self.previous()
+    }
+
+    fn expression(&mut self) -> Expr {
+        self.equality()
+    }
+
+    fn equality(&mut self) -> Expr {
+        let mut expr = self.comparison();
+
+        // handle the ( ...)* part of the rule for association
+        let matchEquality = || {
+            match self.peek().kind {
+                TokenKind::BangEqual | TokenKind::EqualEqual =>  {
+                    self.advance();
+                    true
+                }
+                _ => false
+            }
+        };
+
+        while matchEquality() {
+            let operator = self.previous();
+            let right = self.comparison();
+            expr = Expr::Binary(Box::from(expr), operator, Box::from(right));
+        }
+
+        expr
+    }
+
+    fn comparison(&mut self) -> Expr {
+        
+    }
+}
 
 fn pretty_print(expr: &Expr) -> String {
     let mut output = String::new();
 
     match expr {
-        Expr::Unary(token, expr) => { 
-            output.push_str(&token.lexeme);
-            output.push_str(&pretty_print(expr.as_ref()))
-        }
         Expr::Literal(token) => {
             output.push_str(&token.lexeme);
+        }
+        Expr::Unary(token, expr) => { 
+            output.push_str(&token.lexeme);
+            output.push_str(&pretty_print(expr.as_ref()));
+        }
+        Expr::Binary(left, token, right) => {
+            output.push_str(&pretty_print(left.as_ref()));
+            output.push_str(&token.lexeme);
+            output.push_str(&pretty_print(right.as_ref()));
+        }
+        Expr::Grouping(expr) => {
+            output.push_str(&pretty_print(expr.as_ref()));
         }
         _ => output.push_str("Unknown Expression")
     };
