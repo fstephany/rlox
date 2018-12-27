@@ -1,14 +1,14 @@
 use crate::scanner::{Token, TokenKind};
 
 #[derive(Debug, Clone)]
-enum ParseError {
+pub enum ParseError {
     MissingParenthesis,
     UnexpectedToken,
 }
 
 // The tokens are owned. Probably not the best idea.
 #[derive(PartialEq, Debug)]
-enum Expr {
+pub enum Expr {
     Literal(Token),
     Unary(Token, Box<Expr>),
     Binary(Box<Expr>, Token, Box<Expr>),
@@ -184,24 +184,32 @@ impl Parser {
     }
 }
 
-fn pretty_print(expr: &Expr) -> String {
+pub fn ast_dump(expr: &Expr) -> String {
     let mut output = String::new();
 
     match expr {
         Expr::Literal(token) => {
+            output.push_str("(");
             output.push_str(&token.lexeme);
+            output.push_str(")");
         }
         Expr::Unary(token, expr) => {
+            output.push_str("(");
             output.push_str(&token.lexeme);
-            output.push_str(&pretty_print(expr.as_ref()));
+            output.push_str(&ast_dump(expr.as_ref()));
+            output.push_str(")");
         }
         Expr::Binary(left, token, right) => {
-            output.push_str(&pretty_print(left.as_ref()));
+            output.push_str("(");
+            output.push_str(&ast_dump(left.as_ref()));
             output.push_str(&token.lexeme);
-            output.push_str(&pretty_print(right.as_ref()));
+            output.push_str(&ast_dump(right.as_ref()));
+            output.push_str(")");
         }
         Expr::Grouping(expr) => {
-            output.push_str(&pretty_print(expr.as_ref()));
+            output.push_str("(");
+            output.push_str(&ast_dump(expr.as_ref()));
+            output.push_str(")");
         }
         _ => output.push_str("Unknown Expression"),
     };
@@ -212,13 +220,12 @@ fn pretty_print(expr: &Expr) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::mem::discriminant;
     use crate::scanner::Scanner;
 
     #[test]
     fn print_literal() {
         let number_literal = Token::new(TokenKind::Number(42.0), "42".to_owned(), 1);
-        let result = pretty_print(&Expr::Literal(number_literal));
+        let result = ast_dump(&Expr::Literal(number_literal));
         assert_eq!("42", &result);
     }
 
@@ -228,7 +235,7 @@ mod tests {
         let literal_token = Token::new(TokenKind::Number(42.0), "42".to_owned(), 1);
         let expr = Expr::Unary(minus_token, Box::from(Expr::Literal(literal_token)));
 
-        let result = pretty_print(&expr);
+        let result = ast_dump(&expr);
         assert_eq!("-42", &result);
     }
 
