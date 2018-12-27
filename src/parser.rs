@@ -7,6 +7,7 @@ enum ParseError {
 }
 
 // The tokens are owned. Probably not the best idea.
+#[derive(PartialEq, Debug)]
 enum Expr {
     Literal(Token),
     Unary(Token, Box<Expr>),
@@ -38,6 +39,10 @@ impl Parser {
             tokens: tokens,
             current: 0,
         }
+    }
+
+    pub fn parse(&mut self) -> Expr {
+        self.expression()
     }
 
     // Utilities
@@ -207,6 +212,8 @@ fn pretty_print(expr: &Expr) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::mem::discriminant;
+    use crate::scanner::Scanner;
 
     #[test]
     fn print_literal() {
@@ -223,5 +230,20 @@ mod tests {
 
         let result = pretty_print(&expr);
         assert_eq!("-42", &result);
+    }
+
+    #[test]
+    fn test_parse() {
+        let mut scanner = Scanner::new("3 + 4".to_owned());
+        scanner.scan_tokens();
+        let mut parser = Parser::new(scanner.tokens);
+
+        let expected = Expr::Binary(
+            Box::new(Expr::Literal(Token::new(TokenKind::Number(3.0), "3".to_owned(), 1))),
+            Token::new(TokenKind::Plus, "+".to_owned(), 1),
+            Box::new(Expr::Literal(Token::new(TokenKind::Number(4.0), "4".to_owned(), 1)))
+        );
+
+        assert_eq!(expected, parser.parse());
     }
 }

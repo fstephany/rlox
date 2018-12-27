@@ -50,7 +50,7 @@ pub enum TokenKind {
     Eof,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Token {
     pub kind: TokenKind,
     pub lexeme: String,
@@ -68,7 +68,7 @@ impl Token {
 }
 
 #[derive(Debug)]
-struct Scanner {
+pub struct Scanner {
     pub source: String,
     pub tokens: Vec<Token>,
     pub had_errors: bool,
