@@ -253,4 +253,9 @@ mod tests {
 
         assert_eq!(expected, parser.parse());
     }
+
+    #[test]
+    fn invalid_parse() {
+        
+    }
 }
