@@ -1,6 +1,6 @@
 use crate::scanner::{Token, TokenKind};
 
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum ParseError {
     MissingParenthesis,
     UnexpectedToken,
@@ -41,7 +41,7 @@ impl Parser {
         }
     }
 
-    pub fn parse(&mut self) -> Expr {
+    pub fn parse(&mut self) -> Result<Expr, ParseError> {
         self.expression()
     }
 
@@ -86,25 +86,25 @@ impl Parser {
 
     // GRAMMAR DEF
 
-    fn expression(&mut self) -> Expr {
+    fn expression(&mut self) -> Result<Expr, ParseError> {
         self.equality()
     }
 
-    fn equality(&mut self) -> Expr {
-        let mut expr = self.comparison();
+    fn equality(&mut self) -> Result<Expr, ParseError> {
+        let mut expr = self.comparison()?;
 
         // handle the ( ...)* part of the rule for association
         while self.match_any_of(&[TokenKind::BangEqual, TokenKind::EqualEqual]) {
             let operator = self.previous();
-            let right = self.comparison();
+            let right = self.comparison()?;
             expr = Expr::Binary(Box::from(expr), operator, Box::from(right));
         }
 
-        expr
+        Ok(expr)
     }
 
-    fn comparison(&mut self) -> Expr {
-        let mut expr = self.addition();
+    fn comparison(&mut self) -> Result<Expr, ParseError> {
+        let mut expr = self.addition()?;
 
         // handle the ( ...)* part of the rule for association
         while self.match_any_of(&[
@@ -114,48 +114,48 @@ impl Parser {
             TokenKind::LessEqual,
         ]) {
             let operator = self.previous();
-            let right = self.addition();
+            let right = self.addition()?;
             expr = Expr::Binary(Box::from(expr), operator, Box::from(right));
         }
 
-        expr
+        Ok(expr)
     }
 
-    fn addition(&mut self) -> Expr {
-        let mut expr = self.multiplication();
+    fn addition(&mut self) -> Result<Expr, ParseError> {
+        let mut expr = self.multiplication()?;
 
         // handle the ( ...)* part of the rule for association
         while self.match_any_of(&[TokenKind::Plus, TokenKind::Minus]) {
             let operator = self.previous();
-            let right = self.multiplication();
+            let right = self.multiplication()?;
             expr = Expr::Binary(Box::from(expr), operator, Box::from(right));
         }
 
-        expr
+        Ok(expr)
     }
 
-    fn multiplication(&mut self) -> Expr {
-        let mut expr = self.unary();
+    fn multiplication(&mut self) -> Result<Expr, ParseError> {
+        let mut expr = self.unary()?;
 
         // handle the ( ...)* part of the rule for association
         while self.match_any_of(&[TokenKind::Star, TokenKind::Slash]) {
             let operator = self.previous();
-            let right = self.unary();
+            let right = self.unary()?;
             expr = Expr::Binary(Box::from(expr), operator, Box::from(right));
         }
 
-        expr
+        Ok(expr)
     }
 
-    fn unary(&mut self) -> Expr {
+    fn unary(&mut self) -> Result<Expr, ParseError> {
         match self.peek().kind {
             TokenKind::Bang | TokenKind::Minus => {
                 self.advance();
                 let operator = self.previous();
-                let right = self.unary();
-                Expr::Unary(operator, Box::from(right))
+                let right = self.unary()?;
+                Ok(Expr::Unary(operator, Box::from(right)))
             }
-            _ => self.primary().unwrap(), // FIXME: Propagate the error !
+            _ => self.primary(),
         }
     }
 
@@ -172,7 +172,8 @@ impl Parser {
                 Ok(Expr::Literal(self.previous()))
             }
             TokenKind::LeftParen => {
-                let expr = self.expression();
+                self.advance();
+                let expr = self.expression()?;
                 if self.consume(TokenKind::RightParen).is_none() {
                     Err(ParseError::MissingParenthesis)
                 } else {
@@ -180,6 +181,35 @@ impl Parser {
                 }
             }
             _ => Err(ParseError::UnexpectedToken),
+        }
+    }
+
+    // Error Handling
+
+    /// After an error is signaled, we skip tokens until we reach a token that
+    /// could be a delimiter. The goal is to try to get back on our feet and
+    /// continue parsing.
+    fn synchronize(&mut self) {
+        self.advance();
+
+        while !self.is_at_end() {
+            if self.previous().kind == TokenKind::SemiColon {
+                return;
+            }
+
+            match self.peek().kind {
+                TokenKind::Class
+                | TokenKind::Fun
+                | TokenKind::Var
+                | TokenKind::For
+                | TokenKind::If
+                | TokenKind::While
+                | TokenKind::Print
+                | TokenKind::Return => return,
+                _ => {}
+            }
+
+            self.advance();
         }
     }
 }
@@ -211,7 +241,6 @@ pub fn ast_dump(expr: &Expr) -> String {
             output.push_str(&ast_dump(expr.as_ref()));
             output.push_str(")");
         }
-        _ => output.push_str("Unknown Expression"),
     };
 
     output
@@ -226,7 +255,7 @@ mod tests {
     fn print_literal() {
         let number_literal = Token::new(TokenKind::Number(42.0), "42".to_owned(), 1);
         let result = ast_dump(&Expr::Literal(number_literal));
-        assert_eq!("42", &result);
+        assert_eq!("(42)", &result);
     }
 
     #[test]
@@ -236,7 +265,7 @@ mod tests {
         let expr = Expr::Unary(minus_token, Box::from(Expr::Literal(literal_token)));
 
         let result = ast_dump(&expr);
-        assert_eq!("-42", &result);
+        assert_eq!("(-(42))", &result);
     }
 
     #[test]
@@ -246,16 +275,51 @@ mod tests {
         let mut parser = Parser::new(scanner.tokens);
 
         let expected = Expr::Binary(
-            Box::new(Expr::Literal(Token::new(TokenKind::Number(3.0), "3".to_owned(), 1))),
+            Box::new(Expr::Literal(Token::new(
+                TokenKind::Number(3.0),
+                "3".to_owned(),
+                1,
+            ))),
             Token::new(TokenKind::Plus, "+".to_owned(), 1),
-            Box::new(Expr::Literal(Token::new(TokenKind::Number(4.0), "4".to_owned(), 1)))
+            Box::new(Expr::Literal(Token::new(
+                TokenKind::Number(4.0),
+                "4".to_owned(),
+                1,
+            ))),
         );
 
-        assert_eq!(expected, parser.parse());
+        assert_eq!(expected, parser.parse().unwrap());
     }
 
     #[test]
-    fn invalid_parse() {
-        
+    fn invalid_unary_parse() {
+        let invalid_unary = String::from("-");
+        let mut scanner = Scanner::new(invalid_unary);
+        scanner.scan_tokens();
+        let mut parser = Parser::new(scanner.tokens);
+        assert_eq!(Err(ParseError::UnexpectedToken), parser.parse());
+    }
+
+    #[test]
+    fn invalid_binary_parse() {
+        let invalid_binary = String::from("3 +");
+        let mut scanner = Scanner::new(invalid_binary);
+        scanner.scan_tokens();
+        let mut parser = Parser::new(scanner.tokens);
+        assert_eq!(Err(ParseError::UnexpectedToken), parser.parse());
+    }
+
+        #[test]
+    fn missing_closing_parenthesis() {
+        let missing_parenthesis = String::from("(42");
+        let mut scanner = Scanner::new(missing_parenthesis);
+        scanner.scan_tokens();
+
+        for token in &scanner.tokens {
+            println!("Token: {:?}", token);
+        }
+
+        let mut parser = Parser::new(scanner.tokens);
+        assert_eq!(Err(ParseError::MissingParenthesis), parser.parse());
     }
 }

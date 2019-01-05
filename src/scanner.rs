@@ -422,6 +422,17 @@ mod tests {
     }
 
     #[test]
+    fn parenthesis() {
+        let source = String::from("(42");
+        let mut scanner = Scanner::new(source);
+        scanner.scan_tokens();
+        assert!(!scanner.had_errors);
+
+        assert_eq!(&TokenKind::LeftParen, &scanner.tokens[0].kind);
+        assert_eq!(&TokenKind::Number(42.0), &scanner.tokens[1].kind);
+    }
+
+    #[test]
     fn identifiers() {
         let source = String::from("or k8s _blop var counter");
         let mut scanner = Scanner::new(source);

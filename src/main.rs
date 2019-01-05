@@ -26,7 +26,7 @@ fn run(source: &String) {
     let mut scanner = Scanner::new(source.to_owned());
     scanner.scan_tokens();
     let mut parser = Parser::new(scanner.tokens);
-    let expr = parser.parse();
+    let expr = parser.parse().unwrap();
     let ast_dump = parser::ast_dump(&expr);
 
     println!("{}", ast_dump);
